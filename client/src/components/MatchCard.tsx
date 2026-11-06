@@ -183,44 +183,71 @@ export const MatchCard: React.FC<MatchCardProps> = ({ match }) => {
               </div>
             )}
 
-            {/* Official PDF Sheets (Feuille de match & Convocation) - Opens outside the app in a new tab */}
+            {/* Official PDF Sheets (Feuille de match & Convocation) */}
             <div className="space-y-2 pt-1">
               {isFinished ? (
                 <>
-                  <a
-                    href={api.getMatchSheetUrl(match.id, 'match')}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-[#363a48] hover:bg-[#434859] active:bg-[#4d5366] text-[#f4f5f8] text-xs font-bold transition-all shadow-none outline-none cursor-pointer"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = api.getMatchSheetUrl(match.id, 'match');
+                      try {
+                        const webkit = (window as any).webkit;
+                        if (webkit && webkit.messageHandlers && webkit.messageHandlers.sideoutNative) {
+                          webkit.messageHandlers.sideoutNative.postMessage({ action: 'openUrl', url });
+                          return;
+                        }
+                      } catch {}
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-[#363a48] hover:bg-[#434859] active:bg-[#4d5366] text-[#f4f5f8] text-xs font-bold transition-all border-0 outline-none cursor-pointer"
                   >
                     <FileText className="w-4 h-4 text-[#f4f5f8]" />
                     <span>Feuille de match (PDF)</span>
                     <ExternalLink className="w-3.5 h-3.5 text-[#8e93a4] ml-0.5" />
-                  </a>
+                  </button>
 
-                  <a
-                    href={api.getMatchSheetUrl(match.id, 'convocation')}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-[#232630] hover:bg-[#282d3a] text-[#8e93a4] hover:text-[#f4f5f8] text-xs font-medium transition-all shadow-none outline-none cursor-pointer"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = api.getMatchSheetUrl(match.id, 'convocation');
+                      try {
+                        const webkit = (window as any).webkit;
+                        if (webkit && webkit.messageHandlers && webkit.messageHandlers.sideoutNative) {
+                          webkit.messageHandlers.sideoutNative.postMessage({ action: 'openUrl', url });
+                          return;
+                        }
+                      } catch {}
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-[#232630] hover:bg-[#282d3a] text-[#8e93a4] hover:text-[#f4f5f8] text-xs font-medium transition-all border-0 outline-none cursor-pointer"
                   >
                     <FileText className="w-3.5 h-3.5" />
                     <span>Feuille de convocation (PDF)</span>
                     <ExternalLink className="w-3 h-3 text-[#8e93a4] ml-0.5" />
-                  </a>
+                  </button>
                 </>
               ) : (
                 <>
-                  <a
-                    href={api.getMatchSheetUrl(match.id, 'convocation')}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-[#363a48] hover:bg-[#434859] active:bg-[#4d5366] text-[#f4f5f8] text-xs font-bold transition-all shadow-none outline-none cursor-pointer"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = api.getMatchSheetUrl(match.id, 'convocation');
+                      try {
+                        const webkit = (window as any).webkit;
+                        if (webkit && webkit.messageHandlers && webkit.messageHandlers.sideoutNative) {
+                          webkit.messageHandlers.sideoutNative.postMessage({ action: 'openUrl', url });
+                          return;
+                        }
+                      } catch {}
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl bg-[#363a48] hover:bg-[#434859] active:bg-[#4d5366] text-[#f4f5f8] text-xs font-bold transition-all border-0 outline-none cursor-pointer"
                   >
                     <FileText className="w-4 h-4 text-[#f4f5f8]" />
                     <span>Feuille de convocation (PDF)</span>
                     <ExternalLink className="w-3.5 h-3.5 text-[#8e93a4] ml-0.5" />
-                  </a>
+                  </button>
                   <p className="text-[10px] text-center text-[#8e93a4] pt-0.5">
                     La feuille de match (FDME) sera archivée dès la validation de la rencontre.
                   </p>

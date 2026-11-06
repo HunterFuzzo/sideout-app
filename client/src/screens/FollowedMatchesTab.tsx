@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Match } from '../types';
+import { Match, FollowedTeam } from '../types';
 import { api } from '../services/api';
 import { storage } from '../services/storage';
 import { MatchCard } from '../components/MatchCard';
@@ -15,25 +15,26 @@ export const FollowedMatchesTab: React.FC<FollowedMatchesTabProps> = ({ onNaviga
   const [subTab, setSubTab] = useState<'upcoming' | 'finished'>('upcoming');
   const [matches, setMatches] = useState<Match[]>(() => storage.getCachedFollowedMatches());
   const [loading, setLoading] = useState<boolean>(() => {
-    const clubs = storage.getFollowedClubs();
-    if (clubs.length === 0) return false;
+    const teams = storage.getFollowedTeams();
+    if (teams.length === 0) return false;
     const cached = storage.getCachedFollowedMatches();
     return cached.length === 0;
   });
-  const [followedClubs, setFollowedClubs] = useState<string[]>(storage.getFollowedClubs());
+  const [followedTeams, setFollowedTeams] = useState<FollowedTeam[]>(() => storage.getFollowedTeams());
 
   const loadFollowedMatches = useCallback(async () => {
-    const clubs = storage.getFollowedClubs();
-    setFollowedClubs(clubs);
+    const teams = storage.getFollowedTeams();
+    setFollowedTeams(teams);
 
-    if (clubs.length === 0) {
+    if (teams.length === 0) {
       setMatches([]);
+      storage.clearMatchesCache();
       setLoading(false);
       return;
     }
 
     try {
-      const data = await api.getFollowedMatchesWithClubs([], clubs);
+      const data = await api.getFollowedMatchesForTeams(teams);
       setMatches(data);
       storage.updateFollowedMatchesCache(data);
     } catch (err) {
@@ -117,7 +118,7 @@ export const FollowedMatchesTab: React.FC<FollowedMatchesTabProps> = ({ onNaviga
               /* Minimal empty state */
               <div className="text-center py-12 px-4 space-y-4">
                 <h3 className="font-bold text-sm text-[#8e93a4]">
-                  {followedClubs.length === 0 ? 'Aucune équipe suivie' : 'Aucun match à venir'}
+                  {followedTeams.length === 0 ? 'Aucune équipe suivie' : 'Aucun match à venir'}
                 </h3>
                 <Button
                   size="sm"
@@ -146,7 +147,7 @@ export const FollowedMatchesTab: React.FC<FollowedMatchesTabProps> = ({ onNaviga
               /* Minimal empty state */
               <div className="text-center py-12 px-4">
                 <h3 className="font-bold text-sm text-[#8e93a4]">
-                  {followedClubs.length === 0 ? 'Aucune équipe suivie' : 'Aucun match terminé'}
+                  {followedTeams.length === 0 ? 'Aucune équipe suivie' : 'Aucun match terminé'}
                 </h3>
               </div>
             )}

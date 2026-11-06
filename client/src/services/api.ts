@@ -1,5 +1,10 @@
-import { Competition, Match, PouleDetails } from '../types';
+import { Competition, Match, PouleDetails, FollowedTeam } from '../types';
 import { storage, LOCAL_SERVER_URL } from './storage';
+import fallbackData from '../data/fallbackCompetitions.json';
+import fallbackPoulesData from '../data/fallbackPoules.json';
+
+const fallbackCompetitions: Competition[] = (fallbackData as any).competitions || [];
+const fallbackPoules: Record<string, PouleDetails> = fallbackPoulesData as any;
 
 async function fetchWithFallback<T>(path: string): Promise<T> {
   const primaryUrl = storage.getServerUrl();
@@ -14,7 +19,7 @@ async function fetchWithFallback<T>(path: string): Promise<T> {
     try {
       const res = await fetch(url, {
         headers: { 'Accept': 'application/json' },
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(3500),
       });
       if (res.ok) {
         return await res.json() as T;
@@ -29,16 +34,52 @@ async function fetchWithFallback<T>(path: string): Promise<T> {
 
 export const api = {
   async getCompetitions(saison = '2026/2027'): Promise<Competition[]> {
-    const res = await fetchWithFallback<{ competitions: Competition[] }>(
-      `/api/competitions?saison=${encodeURIComponent(saison)}`
-    );
-    return res.competitions;
+    try {
+      const res = await fetchWithFallback<{ competitions: Competition[] }>(
+        `/api/competitions?saison=${encodeURIComponent(saison)}`
+      );
+      if (res && res.competitions && res.competitions.length > 0) {
+        return res.competitions;
+      }
+    } catch (err) {
+      console.warn('Network fetch failed, using embedded fallback competitions', err);
+    }
+    return fallbackCompetitions;
   },
 
   async getPouleDetails(poule: string, saison = '2026/2027'): Promise<PouleDetails> {
-    return await fetchWithFallback<PouleDetails>(
-      `/api/competitions/${encodeURIComponent(poule)}?saison=${encodeURIComponent(saison)}`
-    );
+    try {
+      const res = await fetchWithFallback<PouleDetails>(
+        `/api/competitions/${encodeURIComponent(poule)}?saison=${encodeURIComponent(saison)}`
+      );
+      if (res && (res.ranking || res.matches)) {
+        return res;
+      }
+    } catch (err) {
+      console.warn(`Network fetch failed for poule ${poule}, using embedded fallback`, err);
+    }
+
+    if (fallbackPoules[poule]) {
+      return fallbackPoules[poule];
+    }
+
+    // Minimal fallback
+    const comp = fallbackCompetitions.find((c) => c.poule === poule) || {
+      poule,
+      name: poule,
+      division: 'REGIONALE' as const,
+      genre: 'MASCULIN' as const,
+      pouleLabel: '',
+      saison,
+      codent: 'LICA',
+    };
+
+    return {
+      competition: comp,
+      ranking: [],
+      matches: [],
+      lastUpdated: new Date().toISOString(),
+    };
   },
 
   async getFollowedMatches(ids: string[], saison = '2026/2027'): Promise<Match[]> {
@@ -50,26 +91,62 @@ export const api = {
   },
 
   getMatchSheetUrl(matchId: string, type: 'match' | 'convocation', saison = '2026/2027', codent = 'LICA'): string {
+    const cleanId = matchId.toUpperCase().replace(/[^A-Z0-9_]/g, '');
+    if (type === 'match') {
+      // Direct official FFVB FDME URL - works directly anywhere
+      return `https://www.ffvbbeach.org/ffvbapp/resu/ffvolley_fdme.php?saison=${encodeURIComponent(saison)}&codent=${encodeURIComponent(codent)}&codmatch=${encodeURIComponent(cleanId)}`;
+    }
     const primaryUrl = storage.getServerUrl();
-    return `${primaryUrl}/api/matches/${encodeURIComponent(matchId)}/sheet?type=${type}&saison=${encodeURIComponent(saison)}&codent=${encodeURIComponent(codent)}`;
+    return `${primaryUrl}/api/matches/${encodeURIComponent(cleanId)}/sheet?type=convocation&saison=${encodeURIComponent(saison)}&codent=${encodeURIComponent(codent)}`;
   },
 
-  async getFollowedMatchesWithClubs(ids: string[], clubNames: string[], saison = '2026/2027'): Promise<Match[]> {
+  async getFollowedMatchesForTeams(followedTeams: FollowedTeam[], saison = '2026/2027'): Promise<Match[]> {
     const matchMap = new Map<string, Match>();
-
-    // 1. Direct match IDs
-    if (ids.length > 0) {
-      try {
-        const directMatches = await this.getFollowedMatches(ids, saison);
-        directMatches.forEach((m) => matchMap.set(m.id, m));
-      } catch {}
+    if (!followedTeams || followedTeams.length === 0) {
+      return [];
     }
 
-    // 2. Matches from followed clubs
-    if (clubNames.length > 0) {
-      try {
+    try {
+      // 1. Teams that have an explicit poule (most accurate and fast)
+      const pouleGroups = new Map<string, FollowedTeam[]>();
+      const teamsWithoutPoule: FollowedTeam[] = [];
+
+      for (const ft of followedTeams) {
+        if (ft.poule) {
+          const p = ft.poule.toUpperCase();
+          if (!pouleGroups.has(p)) pouleGroups.set(p, []);
+          pouleGroups.get(p)!.push(ft);
+        } else {
+          teamsWithoutPoule.push(ft);
+        }
+      }
+
+      // Fetch poules for teams with specified poule
+      await Promise.allSettled(
+        Array.from(pouleGroups.entries()).map(async ([pouleCode, teams]) => {
+          const details = await this.getPouleDetails(pouleCode, saison);
+          const lowerTeams = teams.map((t) => t.team.toLowerCase().trim());
+
+          details.matches.forEach((m) => {
+            // Strictly check poule match
+            if (m.poule && m.poule.toUpperCase() !== pouleCode) return;
+
+            const home = m.homeTeam.toLowerCase();
+            const away = m.awayTeam.toLowerCase();
+            const matchesTeam = lowerTeams.some(
+              (lt) => home.includes(lt) || lt.includes(home) || away.includes(lt) || lt.includes(away)
+            );
+            if (matchesTeam) {
+              matchMap.set(m.id, m);
+            }
+          });
+        })
+      );
+
+      // 2. Teams without poule (legacy fallback)
+      if (teamsWithoutPoule.length > 0) {
         const comps = await this.getCompetitions(saison);
-        const lowerClubs = clubNames.map((c) => c.toLowerCase().trim());
+        const lowerClubs = teamsWithoutPoule.map((c) => c.team.toLowerCase().trim());
 
         const relevantPoules = comps.filter((comp) => {
           return (comp.teams || []).some((t) =>
@@ -81,20 +158,28 @@ export const api = {
           relevantPoules.map(async (comp) => {
             const details = await this.getPouleDetails(comp.poule, saison);
             details.matches.forEach((m) => {
-              const homeMatch = lowerClubs.some((c) => m.homeTeam.toLowerCase().includes(c) || c.includes(m.homeTeam.toLowerCase()));
-              const awayMatch = lowerClubs.some((c) => m.awayTeam.toLowerCase().includes(c) || c.includes(m.awayTeam.toLowerCase()));
-              if (homeMatch || awayMatch) {
+              const home = m.homeTeam.toLowerCase();
+              const away = m.awayTeam.toLowerCase();
+              const matchesTeam = lowerClubs.some(
+                (c) => home.includes(c) || c.includes(home) || away.includes(c) || c.includes(away)
+              );
+              if (matchesTeam) {
                 matchMap.set(m.id, m);
               }
             });
           })
         );
-      } catch (err) {
-        console.error('Failed to load club matches', err);
       }
+    } catch (err) {
+      console.error('Failed to load followed team matches', err);
     }
 
     return Array.from(matchMap.values());
+  },
+
+  async getFollowedMatchesWithClubs(ids: string[], clubNames: string[], saison = '2026/2027'): Promise<Match[]> {
+    const teams: FollowedTeam[] = clubNames.map((c) => ({ team: c }));
+    return this.getFollowedMatchesForTeams(teams, saison);
   },
 
   async testConnection(customUrl?: string): Promise<{ ok: boolean; latency: number; service?: string }> {

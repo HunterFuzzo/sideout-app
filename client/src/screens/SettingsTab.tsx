@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { storage } from '../services/storage';
-import { NotificationSettings } from '../types';
+import { NotificationSettings, FollowedTeam } from '../types';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
@@ -29,13 +29,13 @@ const PACA_CLUBS = [
 export const SettingsTab: React.FC = () => {
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>(storage.getNotificationSettings());
   const [favoriteClub, setFavoriteClub] = useState<string>(storage.getFavoriteClub());
-  const [followedClubs, setFollowedClubs] = useState<string[]>(() => storage.getFollowedClubs());
+  const [followedTeams, setFollowedTeams] = useState<FollowedTeam[]>(() => storage.getFollowedTeams());
   const [testNotificationSent, setTestNotificationSent] = useState<boolean>(false);
 
   useEffect(() => {
     setNotifSettings(storage.getNotificationSettings());
     setFavoriteClub(storage.getFavoriteClub());
-    setFollowedClubs(storage.getFollowedClubs());
+    setFollowedTeams(storage.getFollowedTeams());
   }, []);
 
   const handleUpdateNotif = (key: keyof NotificationSettings, value: any) => {
@@ -52,29 +52,50 @@ export const SettingsTab: React.FC = () => {
 
   const handleClearFollowed = () => {
     storage.clearAllFollowed();
-    setFollowedClubs([]);
+    setFollowedTeams([]);
   };
 
-  const handleRemoveClub = (clubName: string) => {
-    storage.removeFollowedClub(clubName);
-    setFollowedClubs(storage.getFollowedClubs());
+  const handleRemoveTeam = (teamName: string, poule?: string) => {
+    storage.removeFollowedTeam(teamName, poule);
+    setFollowedTeams(storage.getFollowedTeams());
   };
 
   const triggerTestNotification = async () => {
-    if ('Notification' in window) {
-      const perm = await Notification.requestPermission();
-      if (perm === 'granted') {
-        new Notification('🏐 SideOut - Rappel de match', {
+    // 1. Native iOS bridge for WKWebView
+    try {
+      const webkit = (window as any).webkit;
+      if (webkit && webkit.messageHandlers && webkit.messageHandlers.sideoutNative) {
+        webkit.messageHandlers.sideoutNative.postMessage({
+          action: 'notification',
+          title: '🏐 Sideout - Rappel de match',
           body: 'Rappel J-1 : Stade Laurentin vs Nice VB demain à 20h00 !',
-          icon: '/favicon.ico',
         });
         setTestNotificationSent(true);
         setTimeout(() => setTestNotificationSent(false), 4000);
+        return;
       }
-    } else {
-      setTestNotificationSent(true);
-      setTimeout(() => setTestNotificationSent(false), 4000);
+    } catch (e) {
+      console.warn('Native iOS notification error', e);
     }
+
+    // 2. Standard Web Notification API fallback
+    if ('Notification' in window) {
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm === 'granted') {
+          new Notification('🏐 Sideout - Rappel de match', {
+            body: 'Rappel J-1 : Stade Laurentin vs Nice VB demain à 20h00 !',
+            icon: '/logo.png',
+          });
+          setTestNotificationSent(true);
+          setTimeout(() => setTestNotificationSent(false), 4000);
+          return;
+        }
+      } catch {}
+    }
+
+    setTestNotificationSent(true);
+    setTimeout(() => setTestNotificationSent(false), 4000);
   };
 
   return (
@@ -189,15 +210,15 @@ export const SettingsTab: React.FC = () => {
             <div>
               <p className="text-xs font-bold text-[#f4f5f8]">Équipes suivies</p>
               <p className="text-[11px] text-[#8e93a4]">
-                {followedClubs.length === 0
+                {followedTeams.length === 0
                   ? '0 équipe en mémoire'
-                  : `${followedClubs.length} équipe${followedClubs.length > 1 ? 's' : ''} en mémoire`}
+                  : `${followedTeams.length} équipe${followedTeams.length > 1 ? 's' : ''} en mémoire`}
               </p>
             </div>
             <Button
               size="sm"
               onClick={handleClearFollowed}
-              disabled={followedClubs.length === 0}
+              disabled={followedTeams.length === 0}
               className="h-8 text-xs px-3 bg-[#2b2f3d] hover:bg-[#363b4d] text-[#f4f5f8] border-0 rounded-xl outline-none cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5 mr-1" />
@@ -205,19 +226,24 @@ export const SettingsTab: React.FC = () => {
             </Button>
           </div>
 
-          {followedClubs.length > 0 && (
+          {followedTeams.length > 0 && (
             <div className="flex flex-wrap gap-1.5 pt-1">
-              {followedClubs.map((club) => (
+              {followedTeams.map((ft, idx) => (
                 <span
-                  key={club}
+                  key={`${ft.team}-${ft.poule || idx}`}
                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[11px] bg-[#1a1c23] text-[#f4f5f8] font-medium border border-[#2b2f3d]"
                 >
-                  <span className="truncate max-w-[200px]">{club}</span>
+                  <span className="truncate max-w-[170px]">{ft.team}</span>
+                  {ft.poule && (
+                    <span className="text-[10px] font-mono font-bold bg-[#272b38] text-emerald-400 px-1.5 py-0.5 rounded">
+                      {ft.poule}
+                    </span>
+                  )}
                   <button
                     type="button"
-                    onClick={() => handleRemoveClub(club)}
+                    onClick={() => handleRemoveTeam(ft.team, ft.poule)}
                     className="hover:text-rose-400 text-[#8e93a4] transition-colors cursor-pointer"
-                    title={`Ne plus suivre ${club}`}
+                    title={`Ne plus suivre ${ft.team}`}
                   >
                     <X className="w-3 h-3" />
                   </button>

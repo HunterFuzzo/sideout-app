@@ -40,32 +40,65 @@
 }
 
 @layer base {
-  * {
-    @apply border-border;
+  *, *::before, *::after {
     box-sizing: border-box;
     -webkit-tap-highlight-color: transparent !important;
+    -webkit-touch-callout: none !important;
   }
+
   *:focus,
   *:focus-visible,
   *:active,
+  *:focus-within,
   button:focus,
   button:focus-visible,
   button:active,
-  input:focus,
-  input:focus-visible,
+  a:focus,
+  a:focus-visible,
+  a:active,
+  div:focus,
+  div:focus-visible,
+  div:active,
   [data-state=active],
   [tabindex]:focus,
   [tabindex]:focus-visible {
     outline: none !important;
+    outline-style: none !important;
+    outline-color: transparent !important;
     box-shadow: none !important;
+    -webkit-box-shadow: none !important;
     --tw-ring-color: transparent !important;
     --tw-ring-shadow: none !important;
     --tw-ring-offset-shadow: none !important;
+    --tw-ring-offset-width: 0px !important;
+  }
+
+  /* Completely hide all scrollbars across mobile & desktop */
+  ::-webkit-scrollbar,
+  .no-scrollbar::-webkit-scrollbar,
+  *::-webkit-scrollbar {
+    display: none !important;
+    width: 0px !important;
+    height: 0px !important;
+    background: transparent !important;
+  }
+
+  * {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+  }
+
+  html {
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
+    background-color: #1a1c22;
   }
   body {
     @apply bg-background text-foreground font-sans;
     font-feature-settings: "rlig" 1, "calt" 1;
     overflow-x: hidden;
+    overscroll-behavior: none;
+    overscroll-behavior-y: none;
     user-select: none;
     -webkit-user-select: none;
     background-color: #1a1c22;

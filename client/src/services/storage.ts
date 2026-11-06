@@ -1,4 +1,4 @@
-import { Match, NotificationSettings } from '../types';
+import { Match, NotificationSettings, FollowedTeam } from '../types';
 
 const STORAGE_KEYS = {
   SERVER_URL: 'sideout_server_url',
@@ -39,54 +39,128 @@ export const storage = {
     } catch {}
   },
 
-  // --- Followed Teams / Clubs ---
-  getFollowedClubs(): string[] {
+  // --- Followed Teams (with Poule context) ---
+  getFollowedTeams(): FollowedTeam[] {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.FOLLOWED_TEAMS);
-      return data ? JSON.parse(data) : [];
+      if (!data) return [];
+      const parsed = JSON.parse(data);
+      if (!Array.isArray(parsed)) return [];
+
+      let modified = false;
+      const list: FollowedTeam[] = parsed.map((item) => {
+        if (typeof item === 'string') {
+          // Legacy string migration
+          if (item.includes('::')) {
+            const [team, poule, competitionName] = item.split('::');
+            return { team: team.trim(), poule: poule?.trim(), competitionName: competitionName?.trim() };
+          }
+          // If legacy plain "VOLLEY-BALL STADE LAURENTIN", migrate to RMA Régionale
+          if (item.toUpperCase().includes('LAURENTIN')) {
+            modified = true;
+            return {
+              team: item.trim(),
+              poule: 'RMA',
+              competitionName: 'Régionale Masculine',
+            };
+          }
+          return { team: item.trim() };
+        }
+        return item as FollowedTeam;
+      });
+
+      if (modified) {
+        localStorage.setItem(STORAGE_KEYS.FOLLOWED_TEAMS, JSON.stringify(list));
+      }
+
+      return list;
     } catch {
       return [];
     }
   },
 
-  isClubFollowed(clubName: string): boolean {
-    if (!clubName) return false;
-    const norm = clubName.trim().toLowerCase();
-    return this.getFollowedClubs().some((c) => c.toLowerCase() === norm);
+  getFollowedClubs(): string[] {
+    return this.getFollowedTeams().map((t) => t.team);
   },
 
-  toggleFollowClub(clubName: string): boolean {
-    if (!clubName) return false;
-    const clean = clubName.trim();
-    let list = this.getFollowedClubs();
-    const index = list.findIndex((c) => c.toLowerCase() === clean.toLowerCase());
+  isTeamFollowed(teamName: string, poule?: string): boolean {
+    if (!teamName) return false;
+    const norm = teamName.trim().toLowerCase();
+    const list = this.getFollowedTeams();
+    return list.some((ft) => {
+      const teamMatch = ft.team.trim().toLowerCase() === norm;
+      if (!teamMatch) return false;
+      if (poule && ft.poule) {
+        return ft.poule.trim().toUpperCase() === poule.trim().toUpperCase();
+      }
+      return true;
+    });
+  },
+
+  isClubFollowed(clubName: string, poule?: string): boolean {
+    return this.isTeamFollowed(clubName, poule);
+  },
+
+  toggleFollowTeam(teamName: string, poule?: string, competitionName?: string): boolean {
+    if (!teamName) return false;
+    const cleanTeam = teamName.trim();
+    const cleanPoule = poule?.trim().toUpperCase();
+    const cleanComp = competitionName?.trim();
+
+    let list = this.getFollowedTeams();
+    const existingIndex = list.findIndex((ft) => {
+      const nameMatch = ft.team.toLowerCase() === cleanTeam.toLowerCase();
+      if (!nameMatch) return false;
+      if (cleanPoule && ft.poule) {
+        return ft.poule.toUpperCase() === cleanPoule;
+      }
+      return true;
+    });
+
     let isFollowed = false;
-    if (index >= 0) {
-      list = list.filter((c) => c.toLowerCase() !== clean.toLowerCase());
+    if (existingIndex >= 0) {
+      list.splice(existingIndex, 1);
       isFollowed = false;
     } else {
-      list.push(clean);
+      list.push({
+        team: cleanTeam,
+        poule: cleanPoule,
+        competitionName: cleanComp,
+      });
       isFollowed = true;
     }
+
     try {
       localStorage.setItem(STORAGE_KEYS.FOLLOWED_TEAMS, JSON.stringify(list));
-      if (!isFollowed && list.length === 0) {
-        this.clearMatchesCache();
-      }
+      this.clearMatchesCache();
     } catch {}
     return isFollowed;
   },
 
-  removeFollowedClub(clubName: string): void {
-    if (!clubName) return;
-    const clean = clubName.trim().toLowerCase();
-    const list = this.getFollowedClubs().filter((c) => c.toLowerCase() !== clean);
+  toggleFollowClub(clubName: string, poule?: string, competitionName?: string): boolean {
+    return this.toggleFollowTeam(clubName, poule, competitionName);
+  },
+
+  removeFollowedTeam(teamName: string, poule?: string): void {
+    if (!teamName) return;
+    const cleanTeam = teamName.trim().toLowerCase();
+    const cleanPoule = poule?.trim().toUpperCase();
+    let list = this.getFollowedTeams().filter((ft) => {
+      const matchTeam = ft.team.toLowerCase() === cleanTeam;
+      if (!matchTeam) return true;
+      if (cleanPoule && ft.poule) {
+        return ft.poule.toUpperCase() !== cleanPoule;
+      }
+      return false;
+    });
     try {
       localStorage.setItem(STORAGE_KEYS.FOLLOWED_TEAMS, JSON.stringify(list));
-      if (list.length === 0) {
-        this.clearMatchesCache();
-      }
+      this.clearMatchesCache();
     } catch {}
+  },
+
+  removeFollowedClub(clubName: string, poule?: string): void {
+    this.removeFollowedTeam(clubName, poule);
   },
 
   clearAllFollowed(): void {

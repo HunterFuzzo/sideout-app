@@ -16,7 +16,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.azuka.sideout",
       "infoPlist": {
-        "UIBackgroundModes": []
+        "UIBackgroundModes": [],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Competition, PouleDetails, Match, RankingRow } from '../types';
+import { Competition, PouleDetails, Match, RankingRow, FollowedTeam } from '../types';
 import { api } from '../services/api';
 import { storage } from '../services/storage';
 import { searchEngine } from '../services/searchEngine';
@@ -64,7 +64,7 @@ export const SearchTab: React.FC = () => {
   // Selected Club modal state
   const [selectedClub, setSelectedClub] = useState<string | null>(null);
   const [clubSubTab, setClubSubTab] = useState<'upcoming' | 'finished'>('upcoming');
-  const [followedClubs, setFollowedClubs] = useState<string[]>(storage.getFollowedClubs());
+  const [followedTeams, setFollowedTeams] = useState<FollowedTeam[]>(() => storage.getFollowedTeams());
 
   // Load competitions on mount
   useEffect(() => {
@@ -113,9 +113,9 @@ export const SearchTab: React.FC = () => {
     );
   };
 
-  const handleToggleFollowClub = (clubName: string) => {
-    storage.toggleFollowClub(clubName);
-    setFollowedClubs(storage.getFollowedClubs());
+  const handleToggleFollowTeam = (teamName: string, poule?: string, competitionName?: string) => {
+    storage.toggleFollowTeam(teamName, poule, competitionName);
+    setFollowedTeams(storage.getFollowedTeams());
   };
 
   // Instant fast search via MiniSearch
@@ -178,6 +178,8 @@ export const SearchTab: React.FC = () => {
   const clubDetails = useMemo(() => {
     if (!selectedClub || !pouleDetails) return null;
 
+    const currentPoule = selectedPoule || pouleDetails.competition?.poule;
+
     const rankingRow = pouleDetails.ranking?.find(
       (r) => r.team.toLowerCase() === selectedClub.toLowerCase()
     );
@@ -192,19 +194,22 @@ export const SearchTab: React.FC = () => {
     const upcoming = matches.filter((m) => m.status === 'UPCOMING');
     const finished = matches.filter((m) => m.status === 'FINISHED');
 
-    const isFollowed = followedClubs.some(
-      (c) => c.toLowerCase() === selectedClub.toLowerCase()
+    const isFollowed = followedTeams.some(
+      (ft) =>
+        ft.team.toLowerCase() === selectedClub.toLowerCase() &&
+        (!ft.poule || !currentPoule || ft.poule.toUpperCase() === currentPoule.toUpperCase())
     );
 
     return {
       name: selectedClub,
+      poule: currentPoule,
       rankingRow,
       upcoming,
       finished,
       isFollowed,
       competitionName: cleanCompName(pouleDetails.competition?.name || ''),
     };
-  }, [selectedClub, pouleDetails, followedClubs]);
+  }, [selectedClub, pouleDetails, followedTeams, selectedPoule]);
 
   return (
     <div className="space-y-4 pb-28">
@@ -234,13 +239,17 @@ export const SearchTab: React.FC = () => {
         )}
       </div>
 
-      {/* Tags Carousel with Croix (X) icon to clear all filters */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar select-none">
+      {/* Tags Carousel without scrollbar & without white outline */}
+      <div
+        className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar select-none"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
         {/* Croix (X) button to reset all selected tags in one click */}
         {selectedTags.length > 0 && (
           <button
+            type="button"
             onClick={() => setSelectedTags([])}
-            className="shrink-0 flex items-center justify-center p-2 rounded-xl bg-[#363a48] text-[#f4f5f8] hover:bg-[#404656] transition-colors outline-none"
+            className="shrink-0 flex items-center justify-center p-2 rounded-xl bg-[#363a48] text-[#f4f5f8] hover:bg-[#404656] active:bg-[#404656] border-0 outline-none focus:outline-none focus:ring-0 transition-colors"
             title="Effacer tous les filtres"
           >
             <X className="w-3.5 h-3.5" />
@@ -251,12 +260,13 @@ export const SearchTab: React.FC = () => {
           const active = selectedTags.includes(tag.id);
           return (
             <button
+              type="button"
               key={tag.id}
               onClick={() => handleToggleTag(tag.id)}
-              className={`shrink-0 text-xs px-3 py-1.5 rounded-xl transition-all outline-none focus:outline-none focus:ring-0 select-none ${
+              className={`shrink-0 text-xs px-3 py-1.5 rounded-xl transition-all border-0 outline-none focus:outline-none focus:ring-0 active:outline-none select-none ${
                 active
                   ? 'bg-[#3b4152] text-[#f4f5f8] font-bold shadow-none'
-                  : 'bg-[#232630] text-[#8e93a4] hover:text-[#d4d4d8] hover:bg-[#282d3a]'
+                  : 'bg-[#232630] text-[#8e93a4] hover:text-[#d4d4d8] hover:bg-[#282d3a] active:bg-[#282d3a]'
               }`}
             >
               {tag.label}
@@ -421,10 +431,16 @@ export const SearchTab: React.FC = () => {
                   </DialogTitle>
                 </div>
 
-                {/* Bouton Suivre le club */}
+                {/* Bouton Suivre l'équipe */}
                 <Button
                   size="sm"
-                  onClick={() => handleToggleFollowClub(clubDetails.name)}
+                  onClick={() =>
+                    handleToggleFollowTeam(
+                      clubDetails.name,
+                      clubDetails.poule || selectedPoule || undefined,
+                      clubDetails.competitionName
+                    )
+                  }
                   className={`w-full h-9 rounded-xl text-xs font-bold border-0 transition-all outline-none focus:outline-none focus:ring-0 ${
                     clubDetails.isFollowed
                       ? 'bg-[#3b4152] text-[#f4f5f8] hover:bg-[#454c60]'
@@ -435,7 +451,7 @@ export const SearchTab: React.FC = () => {
                   {clubDetails.isFollowed ? (
                     <span className="flex items-center gap-1.5 text-emerald-400">
                       <Check className="w-4 h-4" />
-                      Équipe suivie (matchs synchronisés)
+                      Équipe suivie ({clubDetails.poule ? `${clubDetails.poule} • ` : ''}synchronisée)
                     </span>
                   ) : (
                     <span className="flex items-center gap-1.5">

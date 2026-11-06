@@ -42,8 +42,11 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#1a1c22] text-[#f4f5f8] flex flex-col max-w-md mx-auto relative select-none overflow-x-hidden">
-      {/* Main Content Area */}
-      <main className="flex-1 pt-6 pb-28 px-4 overflow-x-hidden">
+      {/* Main Content Area with Safe Area Dynamic Island protection */}
+      <main
+        className="flex-1 pb-32 px-4 overflow-x-hidden"
+        style={{ paddingTop: 'max(calc(env(safe-area-inset-top, 0px) + 14px), 58px)' }}
+      >
         {activeTab === 'matches' && (
           <div key="matches" className="animate-in fade-in duration-200">
             <FollowedMatchesTab onNavigateToSearch={() => handleTabChange('search')} />
@@ -61,8 +64,11 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Floating Capsule Nav Bar with Sliding Active Pill */}
-      <div className="fixed bottom-6 left-0 right-0 z-50 px-5 flex justify-center pointer-events-none max-w-md mx-auto">
+      {/* Floating Capsule Nav Bar slightly lower */}
+      <div
+        className="fixed left-0 right-0 z-50 px-5 flex justify-center pointer-events-none max-w-md mx-auto"
+        style={{ bottom: 'max(calc(env(safe-area-inset-bottom, 0px) + 6px), 14px)' }}
+      >
         <nav className="pointer-events-auto relative w-full max-w-xs sm:max-w-sm bg-[#252833]/95 backdrop-blur-2xl border border-[#343846] rounded-full p-1.5 shadow-[0_14px_35px_rgba(0,0,0,0.55)] flex items-center">
           {/* Sliding indicator pill */}
           <div

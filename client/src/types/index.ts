@@ -76,6 +76,12 @@ export interface PouleDetails {
   lastUpdated: string;
 }
 
+export interface FollowedTeam {
+  team: string;
+  poule?: string;
+  competitionName?: string;
+}
+
 export interface NotificationSettings {
   resultsEnabled: boolean;
   matchRemindersEnabled: boolean;
